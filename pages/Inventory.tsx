@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Filter, Download, Edit2, AlertCircle, Trash2, X, Save, Search, Image as ImageIcon, Upload, AlertTriangle, Loader2, Check } from 'lucide-react';
+import { Plus, Filter, Download, Edit2, AlertCircle, Trash2, X, Save, Search, Image as ImageIcon, Upload, AlertTriangle, Loader2, Check, ScanLine } from 'lucide-react';
 import { Card, Button, Badge, Input } from '../components/UI';
 import { useProductStore } from '../store';
 import { Product } from '../types';
@@ -37,6 +37,13 @@ const Inventory = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Barcode Scanner State
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [scanResult, setScanResult] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [lastBarcode, setLastBarcode] = useState('');
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
   // File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,11 +68,14 @@ const Inventory = () => {
   }, [products, searchTerm, filterCategory, filterStatus]);
 
   // Handlers
-  const handleAddNew = () => {
+  const focusBarcodeInput = () => barcodeInputRef.current?.focus();
+
+  const openAddModal = (prefill: Partial<Product> = {}) => {
     setIsEditMode(false);
     setCurrentProduct({
       id: `p${Date.now()}`,
       sku: '',
+      gtin: '',
       nameEn: '',
       nameMm: '',
       genericName: '',
@@ -75,9 +85,45 @@ const Inventory = () => {
       minStockLevel: 10,
       requiresPrescription: false,
       image: '',
-      batches: []
+      batches: [],
+      ...prefill
     });
     setIsModalOpen(true);
+  };
+
+  const handleAddNew = () => openAddModal();
+
+  const handleBarcodeLookup = (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setLastBarcode(trimmed);
+
+    const found = products.find(
+      (product) =>
+        product.gtin === trimmed ||
+        product.sku.toLowerCase() === trimmed.toLowerCase() ||
+        product.id === trimmed
+    );
+
+    if (found) {
+      setScannedProduct(found);
+      setScanResult({ status: 'success', message: `Matched ${found.nameEn}` });
+      if (typeof document !== 'undefined') {
+        setTimeout(() => {
+          document.getElementById(`inventory-row-${found.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    } else {
+      setScannedProduct(null);
+      setScanResult({ status: 'error', message: `No product found for ${trimmed}` });
+    }
+  };
+
+  const handleBarcodeSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!barcodeInput) return;
+    handleBarcodeLookup(barcodeInput);
+    setBarcodeInput('');
   };
 
   const handleEdit = (product: Product) => {
@@ -183,6 +229,95 @@ const Inventory = () => {
         </div>
       </div>
 
+      <Card title="Barcode Lookup" className="border border-slate-200">
+        <form onSubmit={handleBarcodeSubmit} className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              ref={barcodeInputRef}
+              type="text"
+              placeholder="Scan or enter GTIN / SKU..."
+              value={barcodeInput}
+              onChange={(e) => setBarcodeInput(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-parami/20 focus:border-parami placeholder:text-slate-400"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="primary" className="h-11 px-6">Find</Button>
+            <Button type="button" variant="outline" className="h-11" onClick={() => { setScannedProduct(null); setScanResult(null); focusBarcodeInput(); }}>
+              Clear
+            </Button>
+          </div>
+        </form>
+
+        {scanResult && (
+          <div className={`mt-4 p-3 rounded-xl text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${scanResult.status === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+            <span>{scanResult.message}</span>
+            {scanResult.status === 'error' && lastBarcode && (
+              <Button
+                variant="danger"
+                className="bg-white text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => openAddModal({ sku: lastBarcode, gtin: lastBarcode })}
+              >
+                Add Product
+              </Button>
+            )}
+          </div>
+        )}
+
+        {scannedProduct && (
+          <div className="mt-6 border border-slate-100 rounded-2xl overflow-hidden">
+            <div className="bg-slate-50 px-4 py-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700">Scanned Product Details</h3>
+              <Badge variant={scannedProduct.stockLevel < scannedProduct.minStockLevel ? 'danger' : 'success'}>
+                {scannedProduct.stockLevel < scannedProduct.minStockLevel ? 'Low Stock' : 'In Stock'}
+              </Badge>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-white text-slate-500 uppercase text-[11px] tracking-wide border-b border-slate-100">
+                  <tr>
+                    <th className="px-4 py-3">Product Info</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Stock Level</th>
+                    <th className="px-4 py-3">Price (MMK)</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-white">
+                    <td className="px-4 py-4">
+                      <p className="font-semibold text-slate-800">{scannedProduct.nameEn}</p>
+                      <p className="text-xs text-slate-500 font-mm">{scannedProduct.nameMm}</p>
+                      <p className="text-[10px] text-slate-400 font-mono mt-1">SKU: {scannedProduct.sku}</p>
+                      {scannedProduct.gtin && (
+                        <p className="text-[10px] text-slate-400 font-mono mt-1">GTIN: {scannedProduct.gtin}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className="bg-slate-100 px-2 py-1 rounded text-xs font-medium border border-slate-200">
+                        {scannedProduct.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 font-mono text-sm">
+                      {scannedProduct.stockLevel}
+                    </td>
+                    <td className="px-4 py-4 font-semibold text-slate-800">
+                      {scannedProduct.price.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-4">
+                      <Badge variant={scannedProduct.stockLevel < scannedProduct.minStockLevel ? 'danger' : 'success'}>
+                        {scannedProduct.stockLevel < scannedProduct.minStockLevel ? 'Low Stock' : 'In Stock'}
+                      </Badge>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Card>
+
       <Card className="p-0 overflow-hidden border border-slate-200 shadow-sm">
         {/* Filters Toolbar */}
         <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row gap-4 items-center bg-slate-50/50">
@@ -238,7 +373,12 @@ const Inventory = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-slate-50/80 transition-colors group cursor-pointer" onClick={() => handleEdit(product)}>
+                <tr
+                  key={product.id}
+                  id={`inventory-row-${product.id}`}
+                  className={`hover:bg-slate-50/80 transition-colors group cursor-pointer ${scannedProduct && scannedProduct.id === product.id ? 'ring-2 ring-blue-200 bg-blue-50/40' : ''}`}
+                  onClick={() => handleEdit(product)}
+                >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -352,6 +492,12 @@ const Inventory = () => {
                             placeholder="SCAN-001"
                             value={currentProduct.sku || ''}
                             onChange={(e: any) => handleInputChange('sku', e.target.value)}
+                          />
+                          <Input 
+                            label="GTIN (optional)" 
+                            placeholder="00885123456789"
+                            value={currentProduct.gtin || ''}
+                            onChange={(e: any) => handleInputChange('gtin', e.target.value)}
                           />
                           <Input 
                             label="Generic Name" 
