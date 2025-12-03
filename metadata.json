@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Parami Pharmacy System V2",
+  "description": "Professional Pharmacy & Distribution System for Parami Pharmacy with POS, Inventory, and Analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
