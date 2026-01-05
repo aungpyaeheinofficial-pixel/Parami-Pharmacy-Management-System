@@ -593,13 +593,13 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   settings: {
-    companyName: 'Parami Pharmacy',
+    companyName: 'A7 smart Pharmacy system',
     taxId: '',
     phone: '',
     email: '',
     address: '',
     language: 'English',
-    shopNameReceipt: 'Parami Pharmacy',
+    shopNameReceipt: 'A7 smart Pharmacy system',
     receiptFooter: 'Thank you for shopping with us!',
     paperSize: '80mm (Standard Thermal)',
     defaultPrinter: 'System Default',

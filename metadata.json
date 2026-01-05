@@ -1,6 +1,6 @@
 {
-  "name": "Copy of Parami Pharmacy System V2",
-  "description": "Professional Pharmacy & Distribution System for Parami Pharmacy with POS, Inventory, and Analytics.",
+  "name": "A7 smart Pharmacy system",
+  "description": "Professional Pharmacy & Distribution System for A7 smart Pharmacy system with POS, Inventory, and Analytics.",
   "requestFramePermissions": [
     "camera"
   ]
